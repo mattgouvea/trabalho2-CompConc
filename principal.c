@@ -31,39 +31,42 @@ int pega_numero() {
 
 /* função chamada pelas threads leitoras */
 void *le (void *args) {
-    int id = *(int*) args;
-    int meu_numero, leitura_local = n_leitura;
-    char nome_arquivo[10];
-    sprintf(nome_arquivo, "%d.txt", id);
+    int id = *(int*) args;                                          //id da thread
+    int meu_numero, leitura_local = n_leitura;                      //numero para atendimento, e número de leituras
+    char nome_arquivo[10];                                          //variável para guardar o nome do arquivo de saída
+    sprintf(nome_arquivo, "%d.txt", id);                            //printa o nome do arquivo com .txt na variável
     FILE *f = fopen(nome_arquivo, "w");
 
-    if (f == NULL) {
+    /* checa se conseguiu abrir o arquivo de saída */
+    if (f == NULL) {                                
         printf("arquivo de saida da thread leitora não abriu.\n");
         exit(1);
     }
     
-
+    /* loop principal */
     while(leitura_local>0) {
-        meu_numero = pega_numero();
+        meu_numero = pega_numero();                                 //pega o número da próxima senha de atendimento
         pthread_mutex_lock(&mutex_atendimento);
-        while(meu_numero!=numero_atendimento) {
+        while(meu_numero!=numero_atendimento) {                     //espera chegar sua vez no atendimento
             pthread_cond_wait(&cond_leitura, &mutex_atendimento);
         }
         numero_atendimento=(numero_atendimento+1)%tam_fila;
-        pthread_cond_broadcast(&cond_leitura);
         lendo++; numero_operacao++;
-        fprintf(log_file, "entra_leitura(%d); \t\t //operação n° %d\n", id, numero_operacao);
-        pthread_mutex_unlock(&mutex_atendimento);
+        fprintf(log_file, "entra_leitura(%d); \t\t //operação n° %d. Variavel global: %d\n", id, numero_operacao, global);
+
+        pthread_cond_broadcast(&cond_leitura);                      //sinaliza os leitores
+        pthread_mutex_unlock(&mutex_atendimento);                   //se o proximo na fila for um leitor, pode ler concorrentemente
 
         /* lendo... */
-        fprintf(f, "%d\n", global);
-        //usleep(1);
+        fprintf(f, "%d\n", global);                                 //escreve no arquivo de saída
+        usleep(1);                                                  //espera por 1 microsegundo
 
         pthread_mutex_lock(&mutex_atendimento);
-        lendo--; numero_operacao++;
-        fprintf(log_file, "sai_leitura(); \t\t\t //operação n° %d\n", numero_operacao);
-        if (lendo==0) {
-            pthread_cond_broadcast(&cond_escrita);
+        lendo--; numero_operacao++;                                 //indica que a thread terminou de ler
+        fprintf(log_file, "sai_leitura(); \t\t\t //operação n° %d. Variavel global: %d\n", numero_operacao, global);
+
+        if (lendo==0) {                                             //se for a última thread leitora lendo
+            pthread_cond_broadcast(&cond_escrita);                  //sinaliza os escritores
         }
         pthread_mutex_unlock(&mutex_atendimento);       
         leitura_local--;
@@ -72,27 +75,29 @@ void *le (void *args) {
     pthread_exit(NULL);
 }
 
+/* função chamada pelas threads escritoras */
 void *escreve (void *args) {
-    int id = *(int*) args;
-    int meu_numero, escrita_local = n_escrita;
+    int id = *(int*) args;                                          //id da thread
+    int meu_numero, escrita_local = n_escrita;                      //número para atendimento e número de escritas
 
     while(escrita_local>0) {
-        meu_numero = pega_numero();
+        meu_numero = pega_numero();                                 //pega o próximo número para atendimento
         pthread_mutex_lock(&mutex_atendimento);
-        while (meu_numero!=numero_atendimento || lendo>0) {
+        while (meu_numero!=numero_atendimento || lendo>0) {         //espera sua vez na fila e os leitores terminarem de ler
             pthread_cond_wait(&cond_escrita, &mutex_atendimento);
         }
         
         numero_operacao++;
-        fprintf(log_file, "entra_escrita(%d);\t\t //operação n° %d\n", id, numero_operacao);
+        fprintf(log_file, "entra_escrita(%d);\t\t //operação n° %d. Variavel global: %d\n", id, numero_operacao, global);
+
         /* escrevendo... */
         global = id;
-        printf("Thread %d escreveu\n", id);
-        //usleep(1);
+        usleep(1);                                                  //espera por 1 microsegundo
 
         numero_atendimento = (numero_atendimento+1)%tam_fila;
         numero_operacao++;
-        fprintf(log_file, "sai_escrita(); \t\t\t //operação n° %d\n", numero_operacao);
+        
+        fprintf(log_file, "sai_escrita(); \t\t\t //operação n° %d. Variavel global: %d\n", numero_operacao, global);
         pthread_cond_broadcast(&cond_escrita);
         pthread_cond_broadcast(&cond_leitura);
         pthread_mutex_unlock(&mutex_atendimento);
@@ -106,11 +111,11 @@ void main (int argc, char *argv[]) {
     pthread_t *escritores;
     int *tid_sistema;
     int i;
-    char c, nome_log[100];
-    FILE *modelo = fopen("modelo.c", "r");
+    char c, nome_log[100]; //variável usada pra criar o log a partir do modelo, e nome do log
+    FILE *modelo = fopen("modelo.c", "r"); //abre o modelo para auxiliar na criação do log de saída
     if (modelo==NULL) { printf("modelo não abriu.\n"); exit(1); }
 
-
+    /* inicializa as variáveis de restrição e as de exclusão mútua */
     pthread_cond_init(&cond_escrita, NULL);
     pthread_cond_init(&cond_leitura, NULL);
     pthread_mutex_init(&mutex_atendimento, NULL);
@@ -122,20 +127,24 @@ void main (int argc, char *argv[]) {
         exit(1);
     }
 
+    /* pega as entradas do usuário */
     n_leitores = atoi(argv[1]);
     n_escritores = atoi(argv[2]);
     n_leitura = atoi(argv[3]);
     n_escrita = atoi(argv[4]);
     sprintf(nome_log, "%s.c", argv[5]);
     tam_fila = n_leitores+n_escritores;
-    log_file = fopen(nome_log, "w");
-    if (log_file==NULL) { printf("log_file não abriu.\n"); exit(1); }
+    log_file = fopen(nome_log, "w"); //abre o arquivo de log
+    if (log_file==NULL) { printf("log_file não abriu.\n"); exit(1); } //teste se abriu com sucesso
 
+    /* copia o conteúdo do arquivo de modelo (include do header e definição da main) para o de log */
+    /* para que seja possível executar diretamente o arquivo de log, que é um arquivo .c */
     while ((c=fgetc(modelo)) != EOF) {
         fputc(c, log_file);
     }
     fclose(modelo);
 
+    /* aloca memória para o vetor de escritores e para o vetor de leitores */
     escritores = malloc(sizeof(pthread_t)*n_escritores);
     if (escritores == NULL) { printf("falha no malloc.\n"); exit(1); }
     leitores = malloc(sizeof(pthread_t)*n_leitores);
@@ -160,7 +169,6 @@ void main (int argc, char *argv[]) {
     }
 
     /* Fazendo o join */
-
     for(i=0; i<n_escritores; i++) {
         if(pthread_join(escritores[i], NULL)) {
             printf("Erro no join escritores %d.\n", i);
@@ -175,6 +183,7 @@ void main (int argc, char *argv[]) {
         }
     }
 
+    /* adiciona a última linha no log, pra indicar que o programa executou corretamente se chegou a esse ponto, e finaliza */
     fprintf(log_file, "printf(\"O programa executou corretamente\\n\");\n}");
     fclose(log_file);
     printf("Finalizou com sucesso. Arquivo de log gerado: %s\n", nome_log);

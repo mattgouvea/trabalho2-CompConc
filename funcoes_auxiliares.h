@@ -1,6 +1,8 @@
 #ifndef funcoes
 #define funcoes
 
+/* definição das funções para o programa auxiliar de avaliação da execução do programa principal */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
