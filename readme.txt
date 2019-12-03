@@ -12,9 +12,10 @@ Passos para a execução do programa:
 		-nome do arquivo de log
 		
 		Após a execução, será gerado um arquivo com a extensão .c, com o mesmo nome do parâmetro log.
-		Este arquivo gera um histórico de todas as operações executadas pelas threads, em forma de
+		O programa principal.c, gera um histórico de todas as operações executadas pelas threads, em forma de
 		chamadas de função, e o valor da variável compartilhada em cada operação, dentro de um código 
 		que foi usado como modelo, possibilitando o usuário de simplesmente compilar e executar
 		esse log, para verificar se o programa executou corretamente.
 
-	2. Compilar o código c gerado pelo programa principal, executar esse programa, e verificar a saída.
+	2. Compilar o arquivo de log. Que é um código em c, formatado, gerado pelo programa principal,
+	   executar e verificar a saída.
